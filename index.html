@@ -2,80 +2,121 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Run From the Goose</title>
+<title>Run From the Goose — Hard Mode</title>
 <style>
   body { margin: 0; background: #eef; overflow: hidden; }
   canvas { display: block; background: #c8f7ff; }
+  #timer {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    font-size: 24px;
+    font-family: Arial;
+    background: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
 </style>
 </head>
 <body>
+<div id="timer">0.0s</div>
 <canvas id="game"></canvas>
 
 <script>
-// ====== Setup ======
+// ===== SETUP =====
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
 const player = { x: 200, y: 200, size: 30, speed: 4 };
-const goose = { x: 800, y: 400, size: 40, speed: 2.5 };
+let geese = [
+  { x: 800, y: 400, size: 40, baseSpeed: 2.2, speed: 2.2 }
+];
 
-// Input
+let gameTime = 0;
+let lastTime = performance.now();
+
 const keys = {};
-window.addEventListener("keydown", e => keys[e.key] = true);
-window.addEventListener("keyup", e => keys[e.key] = false);
+addEventListener("keydown", e => keys[e.key] = true);
+addEventListener("keyup", e => keys[e.key] = false);
 
-// ====== Game Loop ======
-function update() {
+// ===== GAME LOOP =====
+function update(dt) {
+  // Update timer
+  gameTime += dt;
+  document.getElementById("timer").textContent = (gameTime/1000).toFixed(1) + "s";
+
+  // Difficulty scaling
+  for (let g of geese) {
+    g.speed = g.baseSpeed + gameTime * 0.0004; // slowly gets faster
+  }
+
+  // Spawn 2nd goose after 20 seconds
+  if (gameTime > 20000 && geese.length < 2) {
+    geese.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      size: 50,
+      baseSpeed: 2.8,
+      speed: 2.8
+    });
+  }
+
   // Player movement
   if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
   if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
   if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
   if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
 
-  // Goose AI — chases you
-  let dx = player.x - goose.x;
-  let dy = player.y - goose.y;
-  let len = Math.hypot(dx, dy);
-  goose.x += (dx / len) * goose.speed;
-  goose.y += (dy / len) * goose.speed;
+  // Goose movement (with prediction)
+  for (let g of geese) {
+    let dx = player.x - g.x + (player.speed * (keys["d"]?6 : keys["a"]?-6 : 0));
+    let dy = player.y - g.y + (player.speed * (keys["s"]?6 : keys["w"]?-6 : 0));
 
-  // Collision = YOU GOT GOOSED
-  if (len < (player.size + goose.size) / 2) {
-    alert("THE GOOSE GOT YOU 😱🦢");
-    goose.x = Math.random() * canvas.width;
-    goose.y = Math.random() * canvas.height;
-    player.x = 200;
-    player.y = 200;
+    let d = Math.hypot(dx, dy);
+    g.x += (dx / d) * g.speed;
+    g.y += (dy / d) * g.speed;
+
+    // Collision
+    if (d < (player.size + g.size) / 2) {
+      alert("THE GOOSE GOT YOU after " + (gameTime/1000).toFixed(1) + " seconds 🦢💀");
+      location.reload();
+    }
   }
 }
 
+// ===== DRAW =====
 function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Player
   ctx.fillStyle = "#0077ff";
   ctx.fillRect(player.x - player.size/2, player.y - player.size/2, player.size, player.size);
 
-  // Goose
-  ctx.fillStyle = "white";
-  ctx.beginPath();
-  ctx.ellipse(goose.x, goose.y, goose.size, goose.size * 0.7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "orange";
-  ctx.fillRect(goose.x + goose.size * 0.3, goose.y - 5, 15, 10); // beak
+  // Geese
+  for (let g of geese) {
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.ellipse(g.x, g.y, g.size, g.size*0.7, 0, 0, Math.PI*2);
+    ctx.fill();
 
-  // Eyes
-  ctx.fillStyle = "black";
-  ctx.beginPath();
-  ctx.arc(goose.x + 10, goose.y - 10, 5, 0, Math.PI * 2);
-  ctx.arc(goose.x + 10, goose.y + 10, 5, 0, Math.PI * 2);
-  ctx.fill();
+    ctx.fillStyle = "orange";
+    ctx.fillRect(g.x + g.size*0.3, g.y - 5, 15, 10);
+
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(g.x + 10, g.y - 10, 5, 0, Math.PI*2);
+    ctx.arc(g.x + 10, g.y + 10, 5, 0, Math.PI*2);
+    ctx.fill();
+  }
 }
 
-function loop() {
-  update();
+function loop(now) {
+  let dt = now - lastTime;
+  lastTime = now;
+
+  update(dt);
   draw();
   requestAnimationFrame(loop);
 }
@@ -83,3 +124,4 @@ loop();
 </script>
 </body>
 </html>
+
