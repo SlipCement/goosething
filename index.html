@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Run From the Goose — Box Runs</title>
+<title>Run From the Goose — Countdown & Speed</title>
 <style>
 body { margin:0; font-family:Arial,sans-serif; overflow:hidden; background:#eef; }
 canvas { display:block; background:#c8f7ff; }
@@ -12,6 +12,7 @@ button { margin:10px; font-size:24px; padding:10px 20px; cursor:pointer; }
 #timer { position:fixed; top:10px; left:10px; font-size:24px; background:white; padding:6px 10px; border-radius:6px; }
 label { font-size:18px; margin:5px; display:flex; align-items:center; }
 input[type=range] { margin-left:10px; }
+#countdown { position:fixed; top:40%; left:50%; transform:translate(-50%,-50%); font-size:80px; color:white; text-shadow:2px 2px 5px black; display:none; }
 </style>
 </head>
 <body>
@@ -28,10 +29,12 @@ input[type=range] { margin-left:10px; }
   <label>Enable Second Goose (Player Mode): <input type="checkbox" id="secondGoose" checked></label>
   <label>Goose Speed Cap: <input type="range" id="speedCap" min="3" max="10" step="0.1" value="6"></label>
   <label>Box Speed (Goose Mode): <input type="range" id="boxSpeed" min="1" max="10" step="0.1" value="3"></label>
+  <label>Game Speed: <input type="range" id="gameSpeed" min="0.5" max="2" step="0.1" value="1"></label>
   <button id="backBtn">Back</button>
 </div>
 
 <div id="timer" style="display:none;">0.0s</div>
+<div id="countdown">3</div>
 <canvas id="game"></canvas>
 
 <script>
@@ -44,6 +47,7 @@ canvas.height = innerHeight;
 const menu = document.getElementById("menu");
 const settingsMenu = document.getElementById("settings");
 const timerDisplay = document.getElementById("timer");
+const countdownEl = document.getElementById("countdown");
 
 const playBtn = document.getElementById("playBtn");
 const gooseBtn = document.getElementById("gooseBtn");
@@ -52,15 +56,18 @@ const backBtn = document.getElementById("backBtn");
 const secondGooseCheckbox = document.getElementById("secondGoose");
 const speedCapSlider = document.getElementById("speedCap");
 const boxSpeedSlider = document.getElementById("boxSpeed");
+const gameSpeedSlider = document.getElementById("gameSpeed");
 
 let enableSecondGoose = true;
 let gooseSpeedCap = parseFloat(speedCapSlider.value);
 let boxSpeed = parseFloat(boxSpeedSlider.value);
+let gameSpeed = parseFloat(gameSpeedSlider.value);
 
 let gameMode = null; // "player" or "goose"
 let player, geese, box, gameTime, lastTime;
-let invincible=false, inGame=false;
+let invincible=false, inGame=false, countdown=false;
 const keys={};
+let gooseDirection = 1; // 1 = right, -1 = left
 
 // INPUT
 addEventListener("keydown", e => keys[e.key]=true);
@@ -73,8 +80,9 @@ playBtn.onclick = ()=>{
     timerDisplay.style.display="block";
     enableSecondGoose = secondGooseCheckbox.checked;
     gooseSpeedCap = parseFloat(speedCapSlider.value);
+    gameSpeed = parseFloat(gameSpeedSlider.value);
     gameMode = "player";
-    startGame();
+    startCountdown();
 };
 gooseBtn.onclick = ()=>{
     menu.style.display="none";
@@ -82,7 +90,8 @@ gooseBtn.onclick = ()=>{
     timerDisplay.style.display="block";
     gameMode = "goose";
     boxSpeed = parseFloat(boxSpeedSlider.value);
-    startGame();
+    gameSpeed = parseFloat(gameSpeedSlider.value);
+    startCountdown();
 };
 settingsBtn.onclick = ()=>{
     menu.style.display="none";
@@ -94,25 +103,178 @@ backBtn.onclick = ()=>{
     enableSecondGoose = secondGooseCheckbox.checked;
     gooseSpeedCap = parseFloat(speedCapSlider.value);
     boxSpeed = parseFloat(boxSpeedSlider.value);
+    gameSpeed = parseFloat(gameSpeedSlider.value);
 };
 
 // RESET GAME
 function resetGame(){
     gameTime=0;
     invincible=false;
+    gooseDirection = 1;
+    for(let key in keys) keys[key]=false; // clear inputs on reset
     if(gameMode==="player"){
         player={x:200,y:200,size:30,speed:4};
         geese=[{x:800,y:400,size:40,baseSpeed:2.2,speed:2.2}];
         if(enableSecondGoose){
             geese.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,size:50,baseSpeed:2.8,speed:2.8});
         }
-        invincible=true;
-        setTimeout(()=>invincible=false,500);
     }else if(gameMode==="goose"){
-        player={x:200,y:200,size:50,speed:5}; // you control goose
+        player={x:200,y:200,size:50,speed:5};
         box={x:Math.random()*(canvas.width-50)+25,y:Math.random()*(canvas.height-50)+25,size:30};
     }
 }
 
+// START COUNTDOWN
+function startCountdown(){
+    countdown = true;
+    countdownEl.style.display="block";
+    countdownEl.textContent = "3";
+    resetGame();
+    let count = 3;
+    const interval = setInterval(()=>{
+        count--;
+        if(count>0) countdownEl.textContent=count;
+        else { 
+            countdownEl.textContent="Go!"; 
+            setTimeout(()=>{countdownEl.style.display="none"; countdown=false; lastTime=performance.now(); inGame=true;},500);
+            clearInterval(interval);
+        }
+    },1000);
+}
+
 // START GAME
-function startGame(){
+function startGame(){ inGame=true; lastTime=performance.now(); requestAnimationFrame(loop); }
+
+// UPDATE
+function update(dt){
+    dt*=gameSpeed;
+    if(!Number.isFinite(dt)) dt=16;
+    gameTime+=dt;
+    timerDisplay.textContent=(gameTime/1000).toFixed(1)+"s";
+
+    if(gameMode==="player"){
+        if(keys["w"]||keys["ArrowUp"]) player.y-=player.speed;
+        if(keys["s"]||keys["ArrowDown"]) player.y+=player.speed;
+        if(keys["a"]||keys["ArrowLeft"]) player.x-=player.speed;
+        if(keys["d"]||keys["ArrowRight"]) player.x+=player.speed;
+        player.x=Math.max(0,Math.min(canvas.width,player.x));
+        player.y=Math.max(0,Math.min(canvas.height,player.y));
+
+        for(let g of geese){
+            g.speed=Math.min(g.baseSpeed+gameTime*0.0002,gooseSpeedCap);
+            let dx=player.x-g.x;
+            let dy=player.y-g.y;
+            let dist=Math.hypot(dx,dy);
+            if(dist<1) dist=1;
+            g.x+=(dx/dist)*g.speed;
+            g.y+=(dy/dist)*g.speed;
+
+            // Determine direction
+            if(dx>0) gooseDirection=1;
+            else gooseDirection=-1;
+
+            if(!invincible && dist<(player.size+g.size)/2){
+                inGame=false;
+                countdown=false;
+                timerDisplay.style.display="none";
+                menu.style.display="flex";
+                for(let key in keys) keys[key]=false;
+                alert("THE GOOSE GOT YOU at "+(gameTime/1000).toFixed(1)+"s 💀🦢");
+                return;
+            }
+        }
+    }else if(gameMode==="goose"){
+        if(keys["w"]||keys["ArrowUp"]) player.y-=player.speed;
+        if(keys["s"]||keys["ArrowDown"]) player.y+=player.speed;
+        if(keys["a"]||keys["ArrowLeft"]){ player.x-=player.speed; gooseDirection=-1; }
+        if(keys["d"]||keys["ArrowRight"]){ player.x+=player.speed; gooseDirection=1; }
+        player.x=Math.max(0,Math.min(canvas.width,player.x));
+        player.y=Math.max(0,Math.min(canvas.height,player.y));
+
+        // Box runs away
+        let dxBox = box.x - player.x;
+        let dyBox = box.y - player.y;
+        let dist = Math.hypot(dxBox,dyBox);
+        if(dist<300){
+            box.x += (dxBox/dist)*boxSpeed;
+            box.y += (dyBox/dist)*boxSpeed;
+            box.x = Math.max(box.size/2, Math.min(canvas.width-box.size/2, box.x));
+            box.y = Math.max(box.size/2, Math.min(canvas.height-box.size/2, box.y));
+        }
+
+        if(dist<(player.size+box.size)/2){
+            inGame=false;
+            countdown=false;
+            timerDisplay.style.display="none";
+            menu.style.display="flex";
+            for(let key in keys) keys[key]=false;
+            alert("YOU GOT THE BOX in "+(gameTime/1000).toFixed(1)+"s! 🦢📦");
+            return;
+        }
+    }
+}
+
+// DRAW
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(!inGame && !countdown) return;
+
+    if(gameMode==="player"){
+        // Player
+        ctx.fillStyle="#0077ff";
+        ctx.fillRect(player.x-player.size/2,player.y-player.size/2,player.size,player.size);
+
+        // Geese
+        for(let g of geese){
+            ctx.save();
+            ctx.translate(g.x,g.y);
+            ctx.scale(gooseDirection,1);
+            ctx.fillStyle="white";
+            ctx.beginPath();
+            ctx.ellipse(0,0,g.size,g.size*0.7,0,0,Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle="orange";
+            ctx.fillRect(g.size*0.3, -5,15,10);
+            ctx.fillStyle="black";
+            ctx.beginPath();
+            ctx.arc(10,-10,5,0,Math.PI*2);
+            ctx.arc(10,10,5,0,Math.PI*2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }else if(gameMode==="goose"){
+        // Player goose
+        ctx.save();
+        ctx.translate(player.x,player.y);
+        ctx.scale(gooseDirection,1);
+        ctx.fillStyle="white";
+        ctx.beginPath();
+        ctx.ellipse(0,0,player.size,player.size*0.7,0,0,Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle="orange";
+        ctx.fillRect(player.size*0.3,-5,15,10);
+        ctx.fillStyle="black";
+        ctx.beginPath();
+        ctx.arc(10,-10,5,0,Math.PI*2);
+        ctx.arc(10,10,5,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+
+        // Box
+        ctx.fillStyle="brown";
+        ctx.fillRect(box.x-box.size/2,box.y-box.size/2,box.size,box.size);
+    }
+}
+
+// LOOP
+function loop(now){
+    if(!Number.isFinite(now)) now=performance.now();
+    let dt=now-lastTime;
+    lastTime=now;
+    if(inGame) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
