@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Run From the Goose</title>
+<style>
+  body { margin: 0; background: #eef; overflow: hidden; }
+  canvas { display: block; background: #c8f7ff; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<script>
+// ====== Setup ======
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const player = { x: 200, y: 200, size: 30, speed: 4 };
+const goose = { x: 800, y: 400, size: 40, speed: 2.5 };
+
+// Input
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+// ====== Game Loop ======
+function update() {
+  // Player movement
+  if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
+  if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+
+  // Goose AI — chases you
+  let dx = player.x - goose.x;
+  let dy = player.y - goose.y;
+  let len = Math.hypot(dx, dy);
+  goose.x += (dx / len) * goose.speed;
+  goose.y += (dy / len) * goose.speed;
+
+  // Collision = YOU GOT GOOSED
+  if (len < (player.size + goose.size) / 2) {
+    alert("THE GOOSE GOT YOU 😱🦢");
+    goose.x = Math.random() * canvas.width;
+    goose.y = Math.random() * canvas.height;
+    player.x = 200;
+    player.y = 200;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Player
+  ctx.fillStyle = "#0077ff";
+  ctx.fillRect(player.x - player.size/2, player.y - player.size/2, player.size, player.size);
+
+  // Goose
+  ctx.fillStyle = "white";
+  ctx.beginPath();
+  ctx.ellipse(goose.x, goose.y, goose.size, goose.size * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "orange";
+  ctx.fillRect(goose.x + goose.size * 0.3, goose.y - 5, 15, 10); // beak
+
+  // Eyes
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(goose.x + 10, goose.y - 10, 5, 0, Math.PI * 2);
+  ctx.arc(goose.x + 10, goose.y + 10, 5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
