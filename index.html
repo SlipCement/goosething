@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Run From the Goose — Hard Mode</title>
+<title>Run From the Goose — Hard Mode FIXED</title>
 <style>
   body { margin: 0; background: #eef; overflow: hidden; }
   canvas { display: block; background: #c8f7ff; }
@@ -30,6 +30,7 @@ canvas.width = innerWidth;
 canvas.height = innerHeight;
 
 const player = { x: 200, y: 200, size: 30, speed: 4 };
+
 let geese = [
   { x: 800, y: 400, size: 40, baseSpeed: 2.2, speed: 2.2 }
 ];
@@ -37,22 +38,36 @@ let geese = [
 let gameTime = 0;
 let lastTime = performance.now();
 
+// Keys
 const keys = {};
 addEventListener("keydown", e => keys[e.key] = true);
 addEventListener("keyup", e => keys[e.key] = false);
 
-// ===== GAME LOOP =====
+// ===== UPDATE =====
 function update(dt) {
-  // Update timer
-  gameTime += dt;
-  document.getElementById("timer").textContent = (gameTime/1000).toFixed(1) + "s";
+  if (!Number.isFinite(dt)) dt = 16; // fallback so no NaNs ever happen
 
-  // Difficulty scaling
+  gameTime += dt;
+  document.getElementById("timer").textContent =
+    (gameTime / 1000).toFixed(1) + "s";
+
+  // Player movement
+  if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
+  if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
+  if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
+  if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+
+  // Clamp inside screen
+  player.x = Math.max(0, Math.min(canvas.width, player.x));
+  player.y = Math.max(0, Math.min(canvas.height, player.y));
+
+  // Difficulty scale
   for (let g of geese) {
-    g.speed = g.baseSpeed + gameTime * 0.0004; // slowly gets faster
+    g.speed = g.baseSpeed + gameTime * 0.0004;
+    if (!Number.isFinite(g.speed)) g.speed = g.baseSpeed;
   }
 
-  // Spawn 2nd goose after 20 seconds
+  // Spawn 2nd goose at 20s
   if (gameTime > 20000 && geese.length < 2) {
     geese.push({
       x: Math.random()*canvas.width,
@@ -63,24 +78,20 @@ function update(dt) {
     });
   }
 
-  // Player movement
-  if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
-  if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
-  if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
-  if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
-
-  // Goose movement (with prediction)
+  // Goose chasing
   for (let g of geese) {
-    let dx = player.x - g.x + (player.speed * (keys["d"]?6 : keys["a"]?-6 : 0));
-    let dy = player.y - g.y + (player.speed * (keys["s"]?6 : keys["w"]?-6 : 0));
+    let dx = player.x - g.x;
+    let dy = player.y - g.y;
+    let dist = Math.hypot(dx, dy);
 
-    let d = Math.hypot(dx, dy);
-    g.x += (dx / d) * g.speed;
-    g.y += (dy / d) * g.speed;
+    if (dist < 1) dist = 1; // avoid division by zero
 
-    // Collision
-    if (d < (player.size + g.size) / 2) {
-      alert("THE GOOSE GOT YOU after " + (gameTime/1000).toFixed(1) + " seconds 🦢💀");
+    g.x += (dx / dist) * g.speed;
+    g.y += (dy / dist) * g.speed;
+
+    // Hit detection
+    if (dist < (player.size + g.size)/2) {
+      alert("THE GOOSE GOT YOU at " + (gameTime/1000).toFixed(1) + "s 💀🦢");
       location.reload();
     }
   }
@@ -112,7 +123,10 @@ function draw() {
   }
 }
 
+// ===== LOOP =====
 function loop(now) {
+  if (!Number.isFinite(now)) now = performance.now(); // safety
+  
   let dt = now - lastTime;
   lastTime = now;
 
@@ -120,9 +134,8 @@ function loop(now) {
   draw();
   requestAnimationFrame(loop);
 }
-loop();
+
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
-
-
